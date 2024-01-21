@@ -162,3 +162,4 @@ cython_debug/
 /8mpt
 /8npt
 *.png
+!img.png
