@@ -61,10 +61,9 @@
             
         3. 合成单字数据集：
             使用 [脚本](https://github.com/AstarLight/CPS-OCR-Engine/blob/master/ocr/gen_printed_char.py) 进行数据增强。
-                
-                ```bash
-                python gen_printed_char.py --out_dir ./data/chars --font_dir ./data/fonts/training --dict_path ./data/dicts/labels.pkl --width 64 --height 64 --margin 8 --rotate 30 --rotate_step 1 --need_aug
-                ```
+            ```
+            python gen_printed_char.py --out_dir ./data/chars --font_dir ./data/fonts/training --dict_path ./data/dicts/labels.pkl --width 64 --height 64 --margin 8 --rotate 30 --rotate_step 1 --need_aug
+            ```
             此外字体方面的数据增强如下：
               - 书宋、仿宋：全部字符
               <!-- - 黑体：一级字对应的繁体字符 -->
