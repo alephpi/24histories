@@ -1,3 +1,4 @@
+import pickle
 def merge():
   with open('ancient.dict', 'r', encoding='utf-8') as f:
     ancient_codes = f.readlines()
@@ -17,6 +18,16 @@ def punc():
   with open('punc.dict','w',encoding='utf-8') as f:
     for c in PUNCS:
       f.write(f"{ord(c):04X}\t{c}\n")
+
 if __name__ == '__main__':
   merge()
   punc()
+  d = {}
+  with open('punc.dict','r',encoding='utf-8') as f:
+    lines = f.readlines()
+  with open('cn.dict','r',encoding='utf-8') as f:
+    lines.extend(f.readlines())
+  for i, line in enumerate(lines):
+    d[i] = line.strip().split('\t')[-1]
+  with open('labels.pkl','wb') as f:
+    pickle.dump(d,f)
