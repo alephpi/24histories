@@ -14,7 +14,7 @@ def merge():
       f.write(f"{code}\t{char}\n")
 
 def punc():
-  PUNCS = '、，。？！：；‘’“”（）【】——·〔〕《》' + '〇' # 对，当初设计unicode的时候错把汉字〇当成标点了
+  PUNCS = '、，。？！：；‘’“”（）【】·〔〕《》' + '〇' # 对，当初设计unicode的时候错把汉字〇当成标点了
   with open('punc.dict','w',encoding='utf-8') as f:
     for c in PUNCS:
       f.write(f"{ord(c):04X}\t{c}\n")
