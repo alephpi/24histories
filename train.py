@@ -4,8 +4,14 @@ from pytorch_lightning import LightningDataModule
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from torchvision import datasets, transforms
 from torch.utils.data import Dataset, DataLoader, random_split
+
 import torch
+import numpy as np
 import cv2
+from collections import Counter
+from sklearn.model_selection import train_test_split
+
+
 
 from lib.ocr_lightning import OCRLit
 
@@ -15,16 +21,29 @@ NUMBER_OF_CLASSES = 12328
 
 torch.set_float32_matmul_precision('medium')
 
-def load_dataset():
+def stratified_split(dataset, ratio):
+    X = np.array([i for i in range(len(dataset))])
+    y = np.array(dataset.targets)
+    train_idx, val_idx, _, _ = train_test_split(X,y, test_size=ratio, stratify=y)
+    train_dataset = torch.utils.data.Subset(dataset, train_idx)
+    val_dataset = torch.utils.data.Subset(dataset, val_idx)
+    return train_dataset, val_dataset
+
+def load_dataset(train_batch_size):
     charset = datasets.ImageFolder('./data/train/', 
                                loader=lambda x: cv2.imread(x, cv2.IMREAD_GRAYSCALE), 
                                transform=transforms.ToTensor())
-    train_dataset, val_dataset = random_split(charset, [0.9, 0.1])
-    train_loader = DataLoader(train_dataset, batch_size=512, shuffle=True, num_workers=12)
-    val_loader = DataLoader(val_dataset, batch_size=256, shuffle=False, num_workers=12)
+
+    # train_dataset, val_dataset = random_split(charset, [0.9, 0.1])
+    train_dataset, val_dataset = stratified_split(charset, 0.1)
+    # a = dict(Counter(charset.targets[i] for i in train_dataset.indices))
+    # print(max(a.values()),min(a.values()))
+
+    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=12)
+    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=12)
     return train_loader, val_loader
 
-def train_model(model_name, save_name=None, **kwargs):
+def train_model(model_name, train_batch_size, save_name=None, **kwargs):
     """Train model.
 
     Args:
@@ -43,13 +62,13 @@ def train_model(model_name, save_name=None, **kwargs):
         precision='16-mixed',
         # How many epochs to train for if no patience is set
         max_epochs=10,
-        val_check_interval=500,
+        val_check_interval=1000,
         callbacks=[
             # ModelCheckpoint(
             #     save_weights_only=True, mode="max", monitor="val_acc"
             # ),  # Save the best checkpoint based on the maximum val_acc recorded. Saves only weights and not optimizer
             ModelCheckpoint(
-                filename = "checkpoint_{epoch:03d}",
+                filename = "{epoch}-{step}-{val_acc:.2f}",
                 save_top_k=10,
                 monitor="val_acc",
                 mode='max',
@@ -59,7 +78,7 @@ def train_model(model_name, save_name=None, **kwargs):
     )  # In case your notebook crashes due to the progress bar, consider increasing the refresh rate
     trainer.logger._log_graph = True  # If True, we plot the computation graph in tensorboard
     trainer.logger._default_hp_metric = None  # Optional logging argument that we don't need
-
+    trainer.logger.log_hyperparams({"train_batch_size": train_batch_size})
     # Check whether pretrained model exists. If yes, load it and skip training
     pretrained_filename = os.path.join(CHECKPOINT_PATH, save_name + ".ckpt")
     if os.path.isfile(pretrained_filename):
@@ -68,7 +87,7 @@ def train_model(model_name, save_name=None, **kwargs):
         model = OCRLit.load_from_checkpoint(pretrained_filename)
     else:
         L.seed_everything(42)  # To be reproducible
-        train_loader, val_loader = load_dataset()
+        train_loader, val_loader = load_dataset(train_batch_size=train_batch_size)
         model = OCRLit(model_name=model_name, **kwargs)
         trainer.fit(model, train_loader, val_loader)
         model = OCRLit.load_from_checkpoint(
@@ -84,6 +103,7 @@ def train_model(model_name, save_name=None, **kwargs):
 if __name__ == "__main__":
     result = train_model(
         model_name='resnet', 
+        train_batch_size = 256,
         model_hparams={
             'num_classes': NUMBER_OF_CLASSES,
             "c_in": 1,
@@ -98,10 +118,11 @@ if __name__ == "__main__":
             "momentum": 0.9,
             "weight_decay": 1e-4,
         },
-        scheduler_hparams={
-            "lr": 0.1,
-            "init_lr": 1e-4,
-            "warmup_steps": 1000,
+        # scheduler_hparams={
+        #     "lr": 0.1,
+        #     "init_lr": 1e-4,
+        #     "warmup_steps": 1000,
 
-        })
+        # }
+        )
     print(result)
