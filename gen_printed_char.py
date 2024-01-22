@@ -263,7 +263,7 @@ class FontCheck(object):
                 # for i_data in data:
                 #     sum_val += sum(i_data)
                 # if sum_val < 2:
-                np_img = np.asarray(img, dtype='uint8')
+                np_img = np.asarray(img, dtype=np.uint8)
                 if not np_img.any():
                     return False
         except:
