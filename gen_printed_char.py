@@ -18,20 +18,25 @@ import traceback
 import copy
 import sys
 from tqdm import tqdm
+from viztracer import VizTracer
 
+# tracer = VizTracer(output_file="result.json")
 
 class dataAugmentation(object):
-    def __init__(self,noise=True,dilate=True,erode=True):
-        self.noise = noise
-        self.dilate = dilate
-        self.erode = erode
+    def __init__(self) -> None:
+        pass
 
     @classmethod 
-    def add_noise(cls,img):
-        for i in range(20): #添加点噪声
-            temp_x = np.random.randint(0,img.shape[0])
-            temp_y = np.random.randint(0,img.shape[1])
-            img[temp_x][temp_y] = 255
+    def add_noise(cls,img,noise_ratio=0.1):
+        n = int(img.size * noise_ratio)
+        # Generate random coordinates for the masked pixels
+        x = np.random.randint(width - 1, size=n)
+        y = np.random.randint(height - 1, size=n)
+        img[y, x] = 255  # Set pixel to white (255)
+        # for i in range(20): #添加点噪声
+        #     temp_x = np.random.randint(0,img.shape[0])
+        #     temp_y = np.random.randint(0,img.shape[1])
+        #     img[temp_x][temp_y] = 255
         return img
 
     @classmethod
@@ -46,18 +51,30 @@ class dataAugmentation(object):
         img = cv2.dilate(img,kernel) 
         return img
 
-    def do(self,img_list=[]):
-        aug_list= copy.deepcopy(img_list)
-        for i in range(len(img_list)):
-            im = img_list[i]
-            if self.noise and random.random()<0.5:
-                im = self.add_noise(im)
-            if self.dilate and random.random()<0.5:
-                im = self.add_dilate(im)
-            elif self.erode:
-                im = self.add_erode(im)    
-            aug_list.append(im)
-        return aug_list
+    def do(self,img_list: list):
+        aug_list_noise= copy.deepcopy(img_list)
+        aug_list_erode= copy.deepcopy(img_list)
+        aug_list_dialate= copy.deepcopy(img_list)
+        # morph_probs = np.random.random(len(img_list))
+        # noise_probs = np.random.random(len(img_list))
+        aug_list_noise = list(map(self.add_noise, aug_list_noise))
+        aug_list_erode = list(map(self.add_erode, aug_list_erode))
+        aug_list_dialate = list(map(self.add_dilate, aug_list_dialate))
+        img_list += aug_list_noise + aug_list_dialate + aug_list_erode
+        # for i in range(len(img_list)):
+        #     im = img_list[i]
+        #     if morph_prob < 0.5:
+        #         im = self.add_dilate(im)
+        #     elif self.dilate <= morph_prob < self.erode:
+        #         im = self.add_erode(im)    
+        #     else:
+        #         # no op
+        #         pass
+        #     # put noise after morphology
+        #     if noise_prob < self.noise:
+        #         im = self.add_noise(im)
+        #     aug_list.append(im)
+        return img_list
 
 # 对字体图像做等比例缩放
 class PreprocessResizeKeepRatio(object):
@@ -235,17 +252,19 @@ class FontCheck(object):
         height = self.height
         try:
             for i, char in enumerate(self.lang_chars):
-                img = Image.new("RGB", (width, height), "black") # 黑色背景
+                img = Image.new("L", (width, height), "black") # 黑色背景
                 draw = ImageDraw.Draw(img)
                 font = ImageFont.truetype(font_path, int(width * 0.9),)
                 # 白色字体
-                draw.text((0, 0), char, (255, 255, 255),
+                draw.text((0, 0), char, 255,
                           font=font)
-                data = list(img.getdata())
-                sum_val = 0
-                for i_data in data:
-                    sum_val += sum(i_data)
-                if sum_val < 2:
+                # data = list(img.getdata())
+                # sum_val = 0
+                # for i_data in data:
+                #     sum_val += sum(i_data)
+                # if sum_val < 2:
+                np_img = np.asarray(img, dtype='uint8')
+                if not np_img.any():
                     return False
         except:
             print("fail to load:%s" % font_path)
@@ -256,42 +275,56 @@ class FontCheck(object):
 # 生成字体图像
 class Font2Image(object):
 
-    def __init__(self,
+    def __init__(self, 
                  width, height,
                  need_crop, margin):
         self.width = width
         self.height = height
         self.need_crop = need_crop
         self.margin = margin
+        self.find_image_bbox = FindImageBBox()
+        self.preprocess_resize_keep_ratio_fill_bg = \
+            PreprocessResizeKeepRatioFillBG(self.width, self.height,
+                                        fill_bg=False,
+                                        margin=self.margin)
 
-    def do(self, font_path, char, rotate=0):
-        find_image_bbox = FindImageBBox()
+
+    def on(self, font, char):
         # 黑色背景
-        img = Image.new("RGB", (self.width, self.height), "black")
-        draw = ImageDraw.Draw(img)
-        font = ImageFont.truetype(font_path, int(self.width * 0.7),)
+        self.img = Image.new("L", (self.width, self.height), "black")
+        draw = ImageDraw.Draw(self.img)
+        font = ImageFont.truetype(font, int(self.width * 0.7),)
         # 白色字体
-        draw.text((0, 0), char, (255, 255, 255),
+        draw.text((0, 0), char, 255,
                   font=font)
+
+    def do(self, rotate=0):
+        # find_image_bbox = FindImageBBox()
+        # # 黑色背景
+        # img = Image.new("L", (self.width, self.height), "black")
+        # draw = ImageDraw.Draw(img)
+        # font = ImageFont.truetype(font_path, int(self.width * 0.7),)
+        # # 白色字体
+        # draw.text((0, 0), char, 255,
+        #           font=font)
         if rotate != 0:
-            img = img.rotate(rotate)
-        data = list(img.getdata())
-        sum_val = 0
-        for i_data in data:
-            sum_val += sum(i_data)
-        if sum_val > 2:
-            np_img = np.asarray(data, dtype='uint8')
-            np_img = np_img[:, 0]
-            np_img = np_img.reshape((self.height, self.width))
-            cropped_box = find_image_bbox.do(np_img)
+            rotated_img = self.img.rotate(rotate)
+        else:
+            rotated_img = self.img
+        np_img = np.asarray(rotated_img, dtype='uint8')
+        # data = list(img.getdata())
+        # sum_val = 0
+        # for i_data in data:
+        #     sum_val += sum(i_data)
+        # check img is not empty
+        if np_img.any():
+            # np_img = np_img[:, 0]
+            # np_img = np_img.reshape((self.height, self.width))
+            cropped_box = self.find_image_bbox.do(np_img)
             left, upper, right, lower = cropped_box
             np_img = np_img[upper: lower + 1, left: right + 1]
             if not self.need_crop:
-                preprocess_resize_keep_ratio_fill_bg = \
-                    PreprocessResizeKeepRatioFillBG(self.width, self.height,
-                                                    fill_bg=False,
-                                                    margin=self.margin)
-                np_img = preprocess_resize_keep_ratio_fill_bg.do(
+               np_img = self.preprocess_resize_keep_ratio_fill_bg.do(
                     np_img)
             # cv2.imwrite(path_img, np_img)
             return np_img
@@ -359,7 +392,7 @@ python gen_printed_char.py --out_dir ./dataset \
     out_dir = os.path.expanduser(options['out_dir'])
     font_dir = os.path.expanduser(options['font_dir'])
     dict_path = os.path.expanduser(options['dict_path'])
-    test_ratio = float(options['test_ratio'])
+    # test_ratio = float(options['test_ratio'])
     width = int(options['width'])
     height = int(options['height'])
     need_crop = not options['no_crop']
@@ -369,19 +402,19 @@ python gen_printed_char.py --out_dir ./dataset \
     need_aug = options['need_aug']
     dry_run = options['dry_run']
     train_image_dir_name = "train"
-    test_image_dir_name = "test"
+    # test_image_dir_name = "test"
 
     # 将dataset分为train和test两个文件夹分别存储
     train_images_dir = os.path.join(out_dir, train_image_dir_name)
-    test_images_dir = os.path.join(out_dir, test_image_dir_name)
+    # test_images_dir = os.path.join(out_dir, test_image_dir_name)
 
     if os.path.isdir(train_images_dir):
         shutil.rmtree(train_images_dir)
     os.makedirs(train_images_dir)
 
-    if os.path.isdir(test_images_dir):
-        shutil.rmtree(test_images_dir)
-    os.makedirs(test_images_dir)
+    # if os.path.isdir(test_images_dir):
+    #     shutil.rmtree(test_images_dir)
+    # os.makedirs(test_images_dir)
     
     #将汉字的label读入，得到（ID：汉字）的映射表label_dict
     label_dict = get_label_dict(dict_path)
@@ -422,18 +455,20 @@ python gen_printed_char.py --out_dir ./dataset \
 
     font2image = Font2Image(width, height, need_crop, margin)
 
-    prog_bar = tqdm(lang_chars.items(),desc='生成字形')
+    prog_bar = tqdm(lang_chars.items(),desc='生成字形', total=len(lang_chars))
     for (char, value) in prog_bar:  # 外层循环是字
+        # tracer.start()
         image_list = []
         prog_bar.set_postfix(char=char)
         #char_dir = os.path.join(images_dir, "%0.5d" % value)
         for j, verified_font_path in enumerate(verified_font_paths):    # 内层循环是字体   
+            font2image.on(verified_font_path, char)
             if rotate == 0:
-                image = font2image.do(verified_font_path, char)
+                image = font2image.do()
                 image_list.append(image)
             else:
                 for k in all_rotate_angles:	
-                    image = font2image.do(verified_font_path, char, rotate=k)
+                    image = font2image.do(rotate=k)
                     image_list.append(image)
 
 
@@ -441,21 +476,23 @@ python gen_printed_char.py --out_dir ./dataset \
             data_aug = dataAugmentation()
             image_list = data_aug.do(image_list)
             
-        test_num = len(image_list) * test_ratio
-        random.shuffle(image_list)  # 图像列表打乱
-        count = 0
+        # tracer.stop()
+        # test_num = len(image_list) * test_ratio
+        # random.shuffle(image_list)  # 图像列表打乱
+        # count = 0
         for i in range(len(image_list)):
             img = image_list[i]
             #print(img.shape)
-            if count < test_num :
-                char_dir = os.path.join(test_images_dir, "%0.5d" % value)
-            else:
-                char_dir = os.path.join(train_images_dir, "%0.5d" % value)
+            # if count < test_num :
+            #     char_dir = os.path.join(test_images_dir, "%0.5d" % value)
+            # else:
+            #     char_dir = os.path.join(train_images_dir, "%0.5d" % value)
+            char_dir = os.path.join(train_images_dir, "%0.5d" % value)
 
             if not os.path.isdir(char_dir):
                 os.makedirs(char_dir)
 
-            path_image = os.path.join(char_dir,"%d.png" % count)
+            path_image = os.path.join(char_dir,f"{i}.png")
             cv2.imwrite(path_image,img)
             # print(img.dtype)
-            count += 1
+    # tracer.save()
