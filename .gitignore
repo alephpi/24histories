@@ -163,3 +163,7 @@ cython_debug/
 /8npt
 *.png
 !img.png
+*.json
+*.ipynb
+*.pt
+*.pdf
