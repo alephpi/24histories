@@ -20,8 +20,8 @@ def load_dataset():
                                loader=lambda x: cv2.imread(x, cv2.IMREAD_GRAYSCALE), 
                                transform=transforms.ToTensor())
     train_dataset, val_dataset = random_split(charset, [0.9, 0.1])
-    train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True, num_workers=12)
-    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=12)
+    train_loader = DataLoader(train_dataset, batch_size=512, shuffle=True, num_workers=12)
+    val_loader = DataLoader(val_dataset, batch_size=256, shuffle=False, num_workers=12)
     return train_loader, val_loader
 
 def train_model(model_name, save_name=None, **kwargs):
@@ -40,17 +40,21 @@ def train_model(model_name, save_name=None, **kwargs):
         # We run on a single GPU (if possible)
         accelerator="auto",
         devices=1,
+        precision='16-mixed',
         # How many epochs to train for if no patience is set
-        max_epochs=20000,
+        max_epochs=10,
+        val_check_interval=500,
         callbacks=[
             # ModelCheckpoint(
             #     save_weights_only=True, mode="max", monitor="val_acc"
             # ),  # Save the best checkpoint based on the maximum val_acc recorded. Saves only weights and not optimizer
             ModelCheckpoint(
                 filename = "checkpoint_{epoch:03d}",
-                every_n_epochs=500,
+                save_top_k=10,
+                monitor="val_acc",
+                mode='max',
             ),
-            LearningRateMonitor("epoch"),
+            LearningRateMonitor("step"),
         ],  # Log learning rate every epoch
     )  # In case your notebook crashes due to the progress bar, consider increasing the refresh rate
     trainer.logger._log_graph = True  # If True, we plot the computation graph in tensorboard
@@ -83,8 +87,8 @@ if __name__ == "__main__":
         model_hparams={
             'num_classes': NUMBER_OF_CLASSES,
             "c_in": 1,
-            "c_hidden": [8,16,32,64],
-            "num_blocks": [3,4,6,3],
+            "c_hidden": [8,16,32],
+            "num_blocks": [2,2,2],
             "act_fn_name": "relu",
             "block_name": "PreActResNetBlock",
         },
@@ -93,5 +97,11 @@ if __name__ == "__main__":
             "lr": 0.1,
             "momentum": 0.9,
             "weight_decay": 1e-4,
+        },
+        scheduler_hparams={
+            "lr": 0.1,
+            "init_lr": 1e-4,
+            "warmup_steps": 1000,
+
         })
     print(result)
