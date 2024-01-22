@@ -1,9 +1,9 @@
 import os
 import pytorch_lightning as L
-from pytorch_lightning import LightningDataModule
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, EarlyStopping
 from torchvision import datasets, transforms
 from torch.utils.data import Dataset, DataLoader, random_split
+
 
 import torch
 import numpy as np
@@ -74,6 +74,13 @@ def train_model(model_name, train_batch_size, save_name=None, **kwargs):
                 mode='max',
             ),
             LearningRateMonitor("step"),
+            EarlyStopping(
+                monitor='val_acc',
+                min_delta=0,
+                patience=5,
+                mode="max",
+                strict=True
+            )
         ],  # Log learning rate every epoch
     )  # In case your notebook crashes due to the progress bar, consider increasing the refresh rate
     trainer.logger._log_graph = True  # If True, we plot the computation graph in tensorboard
