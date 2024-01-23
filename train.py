@@ -1,4 +1,5 @@
 import os
+from h11 import Data
 import pytorch_lightning as L
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, EarlyStopping
 from torchvision import datasets, transforms
@@ -30,18 +31,22 @@ def stratified_split(dataset, ratio):
     return train_dataset, val_dataset
 
 def load_dataset(train_batch_size):
-    charset = datasets.ImageFolder('./data/train/', 
+    train_val_set = datasets.ImageFolder('./data/train/', 
+                               loader=lambda x: cv2.imread(x, cv2.IMREAD_GRAYSCALE), 
+                               transform=transforms.ToTensor())
+    test_set = datasets.ImageFolder('./data/test/', 
                                loader=lambda x: cv2.imread(x, cv2.IMREAD_GRAYSCALE), 
                                transform=transforms.ToTensor())
 
     # train_dataset, val_dataset = random_split(charset, [0.9, 0.1])
-    train_dataset, val_dataset = stratified_split(charset, 0.1)
+    train_set, val_set = stratified_split(train_val_set, 0.1)
     # a = dict(Counter(charset.targets[i] for i in train_dataset.indices))
     # print(max(a.values()),min(a.values()))
 
-    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=12)
-    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=12)
-    return train_loader, val_loader
+    train_loader = DataLoader(train_set, batch_size=train_batch_size, shuffle=True, num_workers=12)
+    val_loader = DataLoader(val_set, batch_size=128, shuffle=False, num_workers=12)
+    test_loader = DataLoader(test_set, batch_size=256, shuffle=False, num_workers=12)
+    return train_loader, val_loader, test_loader
 
 def train_model(model_name, train_batch_size, save_name=None, **kwargs):
     """Train model.
@@ -86,6 +91,9 @@ def train_model(model_name, train_batch_size, save_name=None, **kwargs):
     trainer.logger._log_graph = True  # If True, we plot the computation graph in tensorboard
     trainer.logger._default_hp_metric = None  # Optional logging argument that we don't need
     trainer.logger.log_hyperparams({"train_batch_size": train_batch_size})
+
+    # load dataset
+    train_loader, val_loader, test_loader = load_dataset(train_batch_size=train_batch_size)
     # Check whether pretrained model exists. If yes, load it and skip training
     pretrained_filename = os.path.join(CHECKPOINT_PATH, save_name + ".ckpt")
     if os.path.isfile(pretrained_filename):
@@ -94,7 +102,6 @@ def train_model(model_name, train_batch_size, save_name=None, **kwargs):
         model = OCRLit.load_from_checkpoint(pretrained_filename)
     else:
         L.seed_everything(42)  # To be reproducible
-        train_loader, val_loader = load_dataset(train_batch_size=train_batch_size)
         model = OCRLit(model_name=model_name, **kwargs)
         trainer.fit(model, train_loader, val_loader)
         model = OCRLit.load_from_checkpoint(
@@ -102,14 +109,16 @@ def train_model(model_name, train_batch_size, save_name=None, **kwargs):
         )  # Load best checkpoint after training
 
     # Test best model on validation and test set
-    val_result = trainer.test(model, dataloaders=val_loader, verbose=False)
-    # test_result = trainer.test(model, dataloaders=test_loader, verbose=False)
-    result = {"val": val_result[0]["test_acc"]}
+    # val_result = trainer.test(model, dataloaders=val_loader, verbose=False)
+    
+    test_result = trainer.test(model, dataloaders=test_loader, verbose=False)
+    result = {"val": test_result[0]["test_acc"]}
 
     return result
 if __name__ == "__main__":
     result = train_model(
         model_name='resnet', 
+        save_name='resnet/lightning_logs/version_15/checkpoints/epoch=1-step=14749-val_acc=0.88',
         train_batch_size = 256,
         model_hparams={
             'num_classes': NUMBER_OF_CLASSES,
