@@ -1,0 +1,8 @@
+numpy
+scikit-learn
+matplotlib
+jupyter
+torch
+torchvision
+torchaudio
+lightning

@@ -170,3 +170,4 @@ cython_debug/
 
 # torch lightning
 lightning_logs/
+!lib/
