@@ -1,0 +1,2 @@
+python gen_printed_char.py --out_dir ./data/train --font_dir ./data/fonts/train --dict_path ./data/dicts/labels.pkl --width 64 --height 64 --margin 8 --rotate 45 --rotate_step 3 --need_aug 
+python gen_printed_char.py --out_dir ./data/test --font_dir ./data/fonts/test --dict_path ./data/dicts/labels.pkl --width 64 --height 64 --margin 8 --rotate 45 --rotate_step 3 --need_aug 

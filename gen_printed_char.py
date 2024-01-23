@@ -401,16 +401,16 @@ python gen_printed_char.py --out_dir ./dataset \
     rotate_step = int(options['rotate_step'])
     need_aug = options['need_aug']
     dry_run = options['dry_run']
-    train_image_dir_name = "train"
+    # train_image_dir_name = "train"
     # test_image_dir_name = "test"
 
     # 将dataset分为train和test两个文件夹分别存储
-    train_images_dir = os.path.join(out_dir, train_image_dir_name)
+    # train_images_dir = os.path.join(out_dir, train_image_dir_name)
     # test_images_dir = os.path.join(out_dir, test_image_dir_name)
 
-    if os.path.isdir(train_images_dir):
-        shutil.rmtree(train_images_dir)
-    os.makedirs(train_images_dir)
+    # if os.path.isdir(train_images_dir):
+    #     shutil.rmtree(train_images_dir)
+    # os.makedirs(train_images_dir)
 
     # if os.path.isdir(test_images_dir):
     #     shutil.rmtree(test_images_dir)
@@ -487,7 +487,7 @@ python gen_printed_char.py --out_dir ./dataset \
             #     char_dir = os.path.join(test_images_dir, "%0.5d" % value)
             # else:
             #     char_dir = os.path.join(train_images_dir, "%0.5d" % value)
-            char_dir = os.path.join(train_images_dir, "%0.5d" % value)
+            char_dir = os.path.join(out_dir, "%0.5d" % value)
 
             if not os.path.isdir(char_dir):
                 os.makedirs(char_dir)
