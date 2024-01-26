@@ -1,4 +1,3 @@
-from typing import Any
 import pytorch_lightning as L
 
 import math
@@ -8,7 +7,6 @@ import torch.optim as optim
 
 from .resnet import ResNet
 
-L.seed_everything(42)
 model_dict = {'resnet': ResNet}
 def create_model(model_name, model_hparams):
   if model_name in model_dict:
@@ -72,9 +70,12 @@ class OCRLit(L.LightningModule):
         else:
             assert False, f'Unknown optimizer: "{self.hparams.optimizer_name}"'
 
+        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+
+        # )
         scheduler = optim.lr_scheduler.MultiStepLR(
             optimizer=optimizer,
-            milestones=[20000,40000],
+            milestones=[2000,4000],
             gamma=0.1)
         # we use inv_sqrt_decay scheduler
         # scheduler = optim.lr_scheduler.LambdaLR(
@@ -86,6 +87,16 @@ class OCRLit(L.LightningModule):
             "scheduler": scheduler,
             "interval": "step",  # or 'epoch'
             "frequency": 1,
+            "monitor": "val_loss",
             "name": "MultiStepLR"
         }
+
+        # lr_scheduler_config = {
+        #     "scheduler": scheduler,
+        #     "interval": "step",  # or 'epoch'
+        #     "frequency": 1000,
+        #     "monitor": "train_loss",
+        #     "name": "ReduceLROnPlateau"
+        # }
+
         return [optimizer], [lr_scheduler_config]

@@ -167,6 +167,8 @@ cython_debug/
 *.ipynb
 *.pt
 *.pdf
+*.tar*
+
 
 # torch lightning
 lightning_logs/
