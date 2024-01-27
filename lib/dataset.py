@@ -1,6 +1,5 @@
 # from torch.utils.data import Dataset
 import os
-from pytorch_lightning.utilities.types import EVAL_DATALOADERS
 from torchvision import datasets, transforms 
 import pytorch_lightning as L
 import numpy as np
