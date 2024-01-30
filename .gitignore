@@ -164,7 +164,7 @@ cython_debug/
 *.png
 !img.png
 *.json
-*.ipynb
+test.ipynb
 *.pt
 *.pdf
 *.tar*
