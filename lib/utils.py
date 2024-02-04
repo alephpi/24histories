@@ -3,21 +3,165 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
-def preprocessing(image: np.ndarray, invert=True) -> np.ndarray:
-  """preprocessing function
+def preprocessing(image: np.ndarray) -> np.ndarray:
+    """preprocessing function
 
-  Args:
-    image (np.ndarray): input image
+    Args:
+        image (np.ndarray): input image
 
-  Returns:
-    np.ndarray: return a denoised and binarized image with black background and white content
-  """
-  # your preprocessing code here
-  assert len(image.shape) == 2, "Input image must be a grayscale image"
-  thresh = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-  if invert:
-    thresh = 255 - thresh
-  return thresh
+    Returns:
+        np.ndarray: return a denoised, binarized, adjusted and underscore free image with black background and white content
+    """
+    # your preprocessing code here
+    assert len(image.shape) == 2, "Input image must be a grayscale image"
+    processed = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    processed = cv2.bitwise_not(processed)
+    processed = adjust_skew(processed)
+    processed = remove_underscore(processed, True)
+
+    return processed
+
+
+def adjust_skew(image: np.ndarray, debug=False) -> np.ndarray:
+    """correct skew image"""
+    cropped, center, angle = find_min_area_rect(image, debug)
+    Mat = cv2.getRotationMatrix2D(center, angle, 1.0)
+    h, w = cropped.shape
+    # fill the border with black in consistent with black background
+    rotated = cv2.warpAffine(cropped, Mat, (w,h), flags=cv2.INTER_CUBIC, borderValue=(0,0,0))
+
+    return rotated 
+
+def detect_header_line(image: np.ndarray) -> np.ndarray:
+    '''detect the header lines
+    '''
+
+    height, width = image.shape
+    kernel = np.ones((1, 100), np.uint8)
+    closed = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)
+    angle_range = [85,95]
+
+    # 边缘检测
+    # edges = cv2.Canny(closed[:int(0.2*height),:], 50, 200, None, 3)
+
+    # 方法1.霍夫变换检测直线
+
+    # lines = cv2.HoughLines(edges, 1, np.pi / 180, threshold=100, min_theta=angle_range[0]*np.pi/180, max_theta=angle_range[1]*np.pi/180)
+    # # 绘制检测到的线
+    # if lines is not None:
+    #     for line in lines:
+    #         rho, theta = line[0]
+    #         a = np.cos(theta)
+    #         b = np.sin(theta)
+    #         x0 = a * rho
+    #         y0 = b * rho
+    #         x1 = int(x0 + 1000 * (-b))
+    #         y1 = int(y0 + 1000 * (a))
+    #         x2 = int(x0 - 1000 * (-b))
+    #         y2 = int(y0 - 1000 * (a))
+    #         cv2.line(image, (x1, y1), (x2, y2), (0, 0, 255), 1, cv2.LINE_AA)
+
+    # # 方法2.概率霍夫变换检测直线
+    # linesP = cv2.HoughLinesP(edges, 1, np.pi / 1000, threshold=50,
+    #                         #  minLineLength=int(0.3*width), maxLineGap=10
+    #                          )
+
+    # if linesP is not None:
+    #     left_ends = []
+    #     right_ends = []
+    #     for i in range(0, len(linesP)):
+    #         l = linesP[i][0]
+    #         # print(l)
+    #         left_ends.append((l[0], l[1]))
+    #         right_ends.append((l[2], l[3]))
+    #     left_ends = sorted(left_ends)
+    #     right_ends = sorted(right_ends)
+    #     left_end = left_ends[0]
+    #     right_end = right_ends[-1]
+    #     # cv2.line(image, left_end, right_end, (0,0,255), 1, cv2.LINE_AA)
+    
+
+        # # 计算原始直线的斜率
+        # m = (np.arctan((left_end[1]-right_end[1])/(left_end[0]-right_end[0])))
+
+        # # 计算旋转角度
+        # theta = np.arctan(m)
+
+        # # 构建仿射变换矩阵
+        # print(left_end)
+        # center = (int(left_end[0]), int(left_end[1]))
+        # rotation_matrix = cv2.getRotationMatrix2D(center, np.degrees(theta), scale=1)
+
+        # # 应用仿射变换到整张图像上
+        # rotated_image = cv2.warpAffine(image, rotation_matrix, (width, height))
+
+        # return rotated_image
+
+    return image 
+
+
+# adapt from https://zhuanlan.zhihu.com/p/81341622
+def find_min_area_rect(image: np.ndarray, debug=False) -> np.ndarray:
+    '''find minimal bounding rectangle'''
+    height, width = image.shape
+
+    # denoising
+    kernel_size = int(51*width/1600) # kernel size adapt to image size, 51 for width 1600
+    if kernel_size % 2 == 0: kernel_size += 1 # assert odd as Gaussian kernel
+    blur = cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
+    _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY|cv2.THRESH_OTSU)
+
+    whereid = np.where(thresh > 0)
+    # 交换横纵坐标的顺序，否则下面得到的每个像素点为(y,x)
+    whereid = whereid[::-1]
+    # 将像素点格式转换为(n_coords, 2)，每个点表示为(x,y)
+    coords = np.column_stack(whereid)
+    (x,y), (w,h), angle = cv2.minAreaRect(coords)
+    if angle < -45:
+        angle = 90 + angle
+    # center = (width//2, height//2)
+    center = (int(x), int(y))
+
+    # crop outside the box
+    box = cv2.boxPoints(((x,y), (w,h), angle))
+    box = np.intp(box)
+    x, y, w, h = cv2.boundingRect(box)
+    cropped = image[y:y+h, x:x+w]
+
+    if debug:
+        vis = image.copy()
+        cv2.drawContours(vis,[box],0,(255,255,255),2)
+        view(vis)
+
+    return cropped, center, angle
+
+def remove_underscore(image: np.ndarray, debug=False) -> np.ndarray:
+    """remove underscore in image
+
+    Args:
+        image (np.ndarray): image
+
+    Returns:
+        np.ndarray: cleaned image
+    """
+    height, width = image.shape
+    # detect underscore with a very thin and long kernel
+    kernel_size = int(40*width/1600) # kernel size adapt to image size, 40 for width 1600
+    kernel = np.ones((1,kernel_size), np.uint8)
+    underscore = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
+    # remove underscore (but may contain horizontal strokes with low intensity)
+    image -= underscore
+    # zeroing those with high intensity (true underscore)
+    image[underscore > 127] = 0
+    if debug:
+        view(underscore)
+    return image
+    proj = underscore.sum(1)
+    if len(proj.nonzero()[0]) == 0:
+        return image
+    else:
+        bound = proj.nonzero()[0][0]
+        return image[:bound]
 
 def cut_line(image: np.ndarray, ignore=10) -> np.ndarray:
     """cut block into lines based on the histogram projection
@@ -51,92 +195,6 @@ def cut_line(image: np.ndarray, ignore=10) -> np.ndarray:
     # plt.figure(figsize=(20,10))
     # plt.imshow(image_sep, cmap='gray')
     return comb
-
-def remove_underscore(image: np.ndarray) -> np.ndarray:
-    """remove underscore in image
-
-    Args:
-        image (np.ndarray): image
-
-    Returns:
-        np.ndarray: cleaned image
-    """
-    kernel = np.ones((1,40), np.uint8)
-    morphed = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
-    proj = morphed.sum(1)
-    if len(proj.nonzero()[0]) == 0:
-        return image
-    else:
-        bound = proj.nonzero()[0][0]
-        return image[:bound]
-
-def adjust_skew(image: np.ndarray) -> np.ndarray:
-    """correct skew image"""
-    height, width = image.shape
-    kernel = np.ones((1, 100), np.uint8)
-    closed = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)
-    angle_range = [85,95]
-    # first detect the header lines
-    # 边缘检测
-    edges = cv2.Canny(closed[:int(0.2*height),:], 50, 200, None, 3)
-
-    # 霍夫变换检测直线
-
-    # lines = cv2.HoughLines(edges, 1, np.pi / 180, threshold=100, min_theta=angle_range[0]*np.pi/180, max_theta=angle_range[1]*np.pi/180)
-    # # 绘制检测到的线
-    # if lines is not None:
-    #     for line in lines:
-    #         rho, theta = line[0]
-    #         a = np.cos(theta)
-    #         b = np.sin(theta)
-    #         x0 = a * rho
-    #         y0 = b * rho
-    #         x1 = int(x0 + 1000 * (-b))
-    #         y1 = int(y0 + 1000 * (a))
-    #         x2 = int(x0 - 1000 * (-b))
-    #         y2 = int(y0 - 1000 * (a))
-    #         cv2.line(image, (x1, y1), (x2, y2), (0, 0, 255), 1, cv2.LINE_AA)
-
-    linesP = cv2.HoughLinesP(edges, 1, np.pi / 1000, threshold=50,
-                            #  minLineLength=int(0.3*width), maxLineGap=10
-                             )
-
-    if linesP is not None:
-        left_ends = []
-        right_ends = []
-        for i in range(0, len(linesP)):
-            l = linesP[i][0]
-            # print(l)
-            left_ends.append((l[0], l[1]))
-            right_ends.append((l[2], l[3]))
-        left_ends = sorted(left_ends)
-        right_ends = sorted(right_ends)
-        left_end = left_ends[0]
-        right_end = right_ends[-1]
-        # cv2.line(image, left_end, right_end, (0,0,255), 1, cv2.LINE_AA)
-
-        # 计算原始直线的斜率
-        m = (np.arctan((left_end[1]-right_end[1])/(left_end[0]-right_end[0])))
-
-        # 计算旋转角度
-        theta = np.arctan(m)
-
-        # 构建仿射变换矩阵
-        print(left_end)
-        center = (int(left_end[0]), int(left_end[1]))
-        rotation_matrix = cv2.getRotationMatrix2D(center, np.degrees(theta), scale=1)
-
-        # 应用仿射变换到整张图像上
-        rotated_image = cv2.warpAffine(image, rotation_matrix, (width, height))
-
-        return rotated_image
-
-    # # 显示结果
-    cv2.imshow("Detected Lines", image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    return image 
-
 
 def cut_char(image: np.ndarray, ignore=5) -> np.ndarray:
     """cut line into chars based on the histogram projection
@@ -207,3 +265,7 @@ def bound_box(image: np.ndarray) -> np.ndarray:
 
 def resize(image: np.ndarray):
     return cv2.resize(image, (64,64))
+
+def view(image: np.ndarray):
+    plt.figure(figsize=(20,15))
+    plt.imshow(image, cmap='gray')

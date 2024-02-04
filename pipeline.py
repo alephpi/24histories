@@ -5,11 +5,12 @@ import torch
 import ultralytics
 from ultralytics import YOLO
 from lib.resnet import ResNet
+from lib.utils import *
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def load_model(detect_model_path='./ckpt/layout-analysis/yolov8n_best.pt', recog_model_path='./ckpt/recognition/best.pt'):
-    detect_model = YOLO('./ckpt/layout-analysis/yolov8n_best.pt').to(device)
+    detect_model = YOLO('./ckpt/layout-analysis/yolov8n_best.pt')
     recog_model = ResNet(num_classes=12328,
                          c_in=1,
                          c_hidden=[16,32,64],
@@ -21,11 +22,6 @@ def load_model(detect_model_path='./ckpt/layout-analysis/yolov8n_best.pt', recog
     recog_model.eval()
     return detect_model, recog_model
 
-def layout_analysis(model, *image_paths):
-    """detect and extract title, table, keep text for further processing and drop out header and etc.
-    """
-    results = model(image_paths)
-
 def load_data(data_path='./data/pages'):
     volumes_collection = []
     books = os.listdir(data_path)
@@ -36,6 +32,11 @@ def load_data(data_path='./data/pages'):
         volumes = [os.path.join(data_path, book, volume) for volume in volumes]
         volumes_collection.extend(volumes)
     return volumes_collection
+
+def layout_analysis(model, *image_paths):
+    """detect and extract title, table, keep text for further processing and drop out header and etc.
+    """
+    results = model(image_paths)
 
 def proc():
     detect_model, recog_model = load_model()
