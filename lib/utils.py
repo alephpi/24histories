@@ -16,20 +16,23 @@ def preprocessing(image: np.ndarray) -> np.ndarray:
     assert len(image.shape) == 2, "Input image must be a grayscale image"
     processed = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     processed = cv2.bitwise_not(processed)
-    processed = adjust_skew(processed)
-    processed = remove_underscore(processed, True)
+    processed = adjust_skew(processed, True)
+    processed = remove_underscore(processed, False)
 
     return processed
 
 
 def adjust_skew(image: np.ndarray, debug=False) -> np.ndarray:
     """correct skew image"""
-    cropped, center, angle = find_min_area_rect(image, debug)
+    center, angle = find_min_area_rect(image, debug)
     Mat = cv2.getRotationMatrix2D(center, angle, 1.0)
-    h, w = cropped.shape
+    h,w = image.shape
+    # h, w = cropped.shape
+    # print(h, w)
     # fill the border with black in consistent with black background
-    rotated = cv2.warpAffine(cropped, Mat, (w,h), flags=cv2.INTER_CUBIC, borderValue=(0,0,0))
-
+    rotated = cv2.warpAffine(image, Mat, (w,h), flags=cv2.INTER_CUBIC, borderValue=(0,0,0))
+    if debug:
+        view(rotated)
     return rotated 
 
 def detect_header_line(image: np.ndarray) -> np.ndarray:
@@ -122,18 +125,15 @@ def find_min_area_rect(image: np.ndarray, debug=False) -> np.ndarray:
     # center = (width//2, height//2)
     center = (int(x), int(y))
 
-    # crop outside the box
-    box = cv2.boxPoints(((x,y), (w,h), angle))
-    box = np.intp(box)
-    x, y, w, h = cv2.boundingRect(box)
-    cropped = image[y:y+h, x:x+w]
-
     if debug:
         vis = image.copy()
+        box = cv2.boxPoints(((x,y), (w,h), angle))
+        box = np.intp(box)
+        x, y, w, h = cv2.boundingRect(box)
         cv2.drawContours(vis,[box],0,(255,255,255),2)
         view(vis)
 
-    return cropped, center, angle
+    return center, angle
 
 def remove_underscore(image: np.ndarray, debug=False) -> np.ndarray:
     """remove underscore in image
@@ -156,12 +156,6 @@ def remove_underscore(image: np.ndarray, debug=False) -> np.ndarray:
     if debug:
         view(underscore)
     return image
-    proj = underscore.sum(1)
-    if len(proj.nonzero()[0]) == 0:
-        return image
-    else:
-        bound = proj.nonzero()[0][0]
-        return image[:bound]
 
 def cut_line(image: np.ndarray, ignore=10) -> np.ndarray:
     """cut block into lines based on the histogram projection

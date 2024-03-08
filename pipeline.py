@@ -1,3 +1,4 @@
+from cgitb import text
 import os
 import numpy as np
 import cv2
@@ -6,6 +7,7 @@ import ultralytics
 from ultralytics import YOLO
 from lib.resnet import ResNet
 from lib.utils import *
+from lib.page import Page
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -33,10 +35,37 @@ def load_data(data_path='./data/pages'):
         volumes_collection.extend(volumes)
     return volumes_collection
 
-def layout_analysis(model, *image_paths):
+def layout_analysis(model:YOLO, images: list[np.ndarray]):
     """detect and extract title, table, keep text for further processing and drop out header and etc.
+
+    Args:
+        images (np.ndarray):  a list of RGB images
     """
-    results = model(image_paths)
+    results = model.predict(images, imgsz=(640,640),iou=0)
+    pages = []
+    for image, result in zip(images, results):
+        boxes = result.boxes.cpu().numpy()
+        view(result.plot())
+        cls = boxes.cls.astype('int')
+        coords = boxes.xyxy.astype('int')
+        # remove non text part and extract titles
+        title_coords = coords[cls == 7]
+        text_coords = coords[cls == 1]
+        titles = []
+        for coords in title_coords:
+            titles.append(image[coords[1]:coords[3], coords[0]:coords[2]])
+        # surrounding box between texts with tolerance of 20 pixels
+        top_texts = text_coords[:,1].min() - 10
+        bottom_texts = text_coords[:,3].max() + 20
+        left_texts = text_coords[:,0].min() - 20
+        right_texts = text_coords[:,2].max() + 20
+        # remove any thing outside the box
+        text_only = image[top_texts:bottom_texts, left_texts:right_texts]
+        view(text_only)
+        pages.append(Page(titles, text_only))
+    return pages, results
+
+
 
 def proc():
     detect_model, recog_model = load_model()
