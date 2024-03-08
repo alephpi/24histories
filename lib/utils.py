@@ -16,7 +16,7 @@ def preprocessing(image: np.ndarray) -> np.ndarray:
     assert len(image.shape) == 2, "Input image must be a grayscale image"
     processed = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     processed = cv2.bitwise_not(processed)
-    processed = adjust_skew(processed, True)
+    processed = adjust_skew(processed, False)
     processed = remove_underscore(processed, False)
 
     return processed
@@ -35,6 +35,7 @@ def adjust_skew(image: np.ndarray, debug=False) -> np.ndarray:
         view(rotated)
     return rotated 
 
+# region
 def detect_header_line(image: np.ndarray) -> np.ndarray:
     '''detect the header lines
     '''
@@ -101,7 +102,7 @@ def detect_header_line(image: np.ndarray) -> np.ndarray:
         # return rotated_image
 
     return image 
-
+# endregion
 
 # adapt from https://zhuanlan.zhihu.com/p/81341622
 def find_min_area_rect(image: np.ndarray, debug=False) -> np.ndarray:
@@ -120,8 +121,11 @@ def find_min_area_rect(image: np.ndarray, debug=False) -> np.ndarray:
     # 将像素点格式转换为(n_coords, 2)，每个点表示为(x,y)
     coords = np.column_stack(whereid)
     (x,y), (w,h), angle = cv2.minAreaRect(coords)
-    if angle < -45:
-        angle = 90 + angle
+    print(x,y, angle)
+    # pay attention to opencv-python version, the rotated angle are different across version
+    # see https://stackoverflow.com/a/70417824/14789892
+    if angle > 45:
+        angle = angle - 90
     # center = (width//2, height//2)
     center = (int(x), int(y))
 
