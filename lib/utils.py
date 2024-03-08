@@ -17,13 +17,17 @@ def preprocessing(image: np.ndarray) -> np.ndarray:
     processed = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     processed = cv2.bitwise_not(processed)
     processed = adjust_skew(processed, False)
-    processed = remove_underscore(processed, False)
+    # processed = remove_underscore(processed, False)
+    # processed = cv2.bitwise_not(processed)
+    # processed = cv2.cvtColor(processed, cv2.COLOR_GRAY2RGB)
 
     return processed
 
 
 def adjust_skew(image: np.ndarray, debug=False) -> np.ndarray:
-    """correct skew image"""
+    """correct skew image
+       image: image with black background
+    """
     center, angle = find_min_area_rect(image, debug)
     Mat = cv2.getRotationMatrix2D(center, angle, 1.0)
     h,w = image.shape
@@ -106,7 +110,9 @@ def detect_header_line(image: np.ndarray) -> np.ndarray:
 
 # adapt from https://zhuanlan.zhihu.com/p/81341622
 def find_min_area_rect(image: np.ndarray, debug=False) -> np.ndarray:
-    '''find minimal bounding rectangle'''
+    '''find minimal bounding rectangle
+       image: image with black background
+    '''
     height, width = image.shape
 
     # denoising
@@ -121,7 +127,7 @@ def find_min_area_rect(image: np.ndarray, debug=False) -> np.ndarray:
     # 将像素点格式转换为(n_coords, 2)，每个点表示为(x,y)
     coords = np.column_stack(whereid)
     (x,y), (w,h), angle = cv2.minAreaRect(coords)
-    print(x,y, angle)
+    # print(x,y, angle)
     # pay attention to opencv-python version, the rotated angle are different across version
     # see https://stackoverflow.com/a/70417824/14789892
     if angle > 45:
@@ -140,10 +146,10 @@ def find_min_area_rect(image: np.ndarray, debug=False) -> np.ndarray:
     return center, angle
 
 def remove_underscore(image: np.ndarray, debug=False) -> np.ndarray:
-    """remove underscore in image
+    """remove underscore 
 
     Args:
-        image (np.ndarray): image
+        image (np.ndarray): image with black background
 
     Returns:
         np.ndarray: cleaned image

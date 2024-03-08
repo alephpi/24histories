@@ -1,4 +1,3 @@
-from cgitb import text
 import os
 import numpy as np
 import cv2
@@ -41,11 +40,14 @@ def layout_analysis(model:YOLO, images: list[np.ndarray]):
     Args:
         images (np.ndarray):  a list of RGB images
     """
-    results = model.predict(images, imgsz=(640,640),iou=0)
+    images = [preprocessing(img) for img in images]
+    inputs = [cv2.bitwise_not(img) for img in images]
+    inputs = [np.repeat(img[:,:,None], 3, axis=-1) for img in inputs]
+    la_results = model.predict(inputs, imgsz=(640,480), iou=0, agnostic_nms=True)
     pages = []
-    for image, result in zip(images, results):
+    for image, result in zip(images, la_results):
         boxes = result.boxes.cpu().numpy()
-        view(result.plot())
+        # view(result.plot())
         cls = boxes.cls.astype('int')
         coords = boxes.xyxy.astype('int')
         # remove non text part and extract titles
@@ -61,9 +63,10 @@ def layout_analysis(model:YOLO, images: list[np.ndarray]):
         right_texts = text_coords[:,2].max() + 20
         # remove any thing outside the box
         text_only = image[top_texts:bottom_texts, left_texts:right_texts]
-        view(text_only)
+        remove_underscore(text_only)
+        # view(text_only)
         pages.append(Page(titles, text_only))
-    return pages, results
+    return pages, la_results
 
 
 
