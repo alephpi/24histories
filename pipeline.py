@@ -2,7 +2,6 @@ import os
 import numpy as np
 import cv2
 import torch
-import ultralytics
 from ultralytics import YOLO
 from lib.resnet import ResNet
 from lib.utils import *
@@ -63,12 +62,12 @@ def layout_analysis(model:YOLO, images: list[np.ndarray]):
         right_texts = text_coords[:,2].max() + 20
         # remove any thing outside the box
         text_only = image[top_texts:bottom_texts, left_texts:right_texts]
-        remove_underscore(text_only)
+        text_only = remove_underscore(text_only)
+        text_only = bound_box(text_only)
+        
         # view(text_only)
         pages.append(Page(titles, text_only))
     return pages, la_results
-
-
 
 def proc():
     detect_model, recog_model = load_model()

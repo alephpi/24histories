@@ -1,4 +1,3 @@
-from typing import Literal, List
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -167,88 +166,21 @@ def remove_underscore(image: np.ndarray, debug=False) -> np.ndarray:
         view(underscore)
     return image
 
-def cut_line(image: np.ndarray, ignore=10) -> np.ndarray:
-    """cut block into lines based on the histogram projection
+def find_local_minima(signal, threshold):
+    # Pad the signal with zeros on both sides
+    padded_signal = np.pad(signal, (1, 1), mode='constant', constant_values=0)
 
-      Args:
-          image (np.ndarray): image of block
-          ignore (int, optional): ignore those hists that have black pixels less than the threshold. Defaults to 10.
+    # Calculate the differences between neighboring elements
+    diff_left = padded_signal[:-2] - padded_signal[1:-1]
+    diff_right = padded_signal[2:] - padded_signal[1:-1]
 
-      Returns:
-          np.ndarray: the cutting indices
-    """
+    # Identify local minima
+    local_minima = (diff_left > 0) & (diff_right > 0) & (signal < threshold)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)) 
-    bold = cv2.dilate(image, kernel, iterations = 1) # 加粗使其更显著
-    proj = np.sum(bold, axis=1) // 255
-    # plt.plot(proj)
-    # we always assume the margin is white, i.e proj[0]==0, proj[-1]==0 to simplify the case
-    valley = np.where(proj < ignore)[0]
-    left_break_idx = np.where(np.diff(valley) != 1)[0]
-    right_break_idx = left_break_idx + 1
-    left_breaks = valley[left_break_idx]
-    right_breaks = valley[right_break_idx]
-    central_breaks = (left_breaks[1:] + right_breaks[:-1]) // 2
-    # when cutting line, we use central breaks to cut more robustly
-    comb = np.zeros(len(central_breaks)+2, dtype=int)
-    comb[0], comb[1:-1], comb[-1] = 0, central_breaks, len(proj)-1
+    # Get the indices of local minima
+    minima_indices = np.where(local_minima)[0]
 
-    # debug
-    # image_sep = image
-    # image_sep[comb] = 255
-    # plt.figure(figsize=(20,10))
-    # plt.imshow(image_sep, cmap='gray')
-    return comb
-
-def cut_char(image: np.ndarray, ignore=5) -> np.ndarray:
-    """cut line into chars based on the histogram projection
-
-      Args:
-          image (np.ndarray): image of line
-          ignore (int, optional): ignore those hists that have black pixels less than the threshold. Defaults to 10.
-
-      Returns:
-          np.ndarray: the cutting indices
-    """
-
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 5)) 
-    bold = cv2.dilate(image, kernel, iterations = 1) # 加粗使其更显著
-    # plt.imshow(bold, cmap='gray')
-    proj = np.sum(bold, axis=0) // 255
-    plt.plot(proj)
-    # we always assume the margin is white, i.e proj[0]==0, proj[-1]==0 to simplify the case
-    valley = np.where(proj < ignore)[0]
-    left_break_idx = np.where(np.diff(valley) != 1)[0]
-    left_breaks = valley[left_break_idx]
-    # when cutting char we only use left breaks to cut evenly (otherwise the punctuation will be in a tiny slice, which will be misrecognized as a oversplit)
-
-    # merge oversplit pieces (left-right structure is less connected horizontally may be overcut)
-    delta = np.diff(left_breaks)
-    comb = []
-    span = 0
-    for d in delta:
-        span += d
-        if span > 20:
-            comb.append(span)
-            span = 0
-    comb = np.cumsum(comb) + left_breaks[0]
-
-    # debug
-    # image_sep = image
-    # image_sep[:, comb] = 255
-    # plt.figure(figsize=(20,10))
-    # plt.imshow(image_sep, cmap='gray')
-    return comb
-
-def combing(image: np.ndarray, comb: np.ndarray, mode:Literal['h','v']) -> List[np.ndarray]:
-    parts = []
-    if mode == 'h':
-        for i in range(len(comb)-1):
-            parts.append(image[comb[i]:comb[i+1], :])
-    elif mode == 'v':
-        for i in range(len(comb)-1):
-            parts.append(image[:, comb[i]:comb[i+1]])
-    return parts
+    return minima_indices
 
 def bound_box(image: np.ndarray) -> np.ndarray:
     """
@@ -265,7 +197,7 @@ def bound_box(image: np.ndarray) -> np.ndarray:
     # Get bounding box coordinates
     min_x, min_y = np.min(nonzero_indices[1]), np.min(nonzero_indices[0])
     max_x, max_y = np.max(nonzero_indices[1]), np.max(nonzero_indices[0])
-    return image[min_y:max_y, min_x:max_x]
+    return image[min_y:max_y+1, min_x:max_x+1]
 
 def resize(image: np.ndarray):
     return cv2.resize(image, (64,64))
