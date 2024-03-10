@@ -174,14 +174,14 @@ def remove_underscore(image: np.ndarray, debug=False) -> np.ndarray:
 
 def find_local_minima(signal, threshold):
     # Pad the signal with zeros on both sides
-    padded_signal = np.pad(signal, (1, 1), mode='constant', constant_values=0)
+    padded_signal = np.pad(signal, (1, 1), mode='constant', constant_values=0).astype(int)
 
     # Calculate the differences between neighboring elements
     diff_left = padded_signal[:-2] - padded_signal[1:-1]
     diff_right = padded_signal[2:] - padded_signal[1:-1]
 
     # Identify local minima
-    local_minima = (diff_left > 0) & (diff_right > 0) & (signal < threshold)
+    local_minima = (((diff_left >= 0) & (diff_right > 0)) | ((diff_left > 0) & (diff_right >= 0))) & (signal < threshold)
 
     # Get the indices of local minima
     minima_indices = np.where(local_minima)[0]
