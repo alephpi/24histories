@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from typing import List, Literal
 
-from lib.utils import bound_box, view
+from lib.utils import bound_box, find_local_minima, view
 import matplotlib.pyplot as plt
 
 def divide_two_cols(image: np.ndarray, ignore=50):
@@ -101,53 +101,110 @@ def cut_char(image: np.ndarray, ignore=5) -> np.ndarray:
           np.ndarray: the cutting indices
     """
 
-    height = image.shape[0]
+    # char is square, so height should be the width of a char
+    height, length = image.shape
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 5)) 
     bold = cv2.dilate(image, kernel, iterations = 1) # 加粗使其更显著
+    view(bold)
     # plt.imshow(bold, cmap='gray')
     proj = np.sum(bold, axis=0) // 255
-    # plt.plot(proj)
+    plt.figure()
+    plt.xlim(150,200)
+    plt.ylim(0,10)
+    plt.plot(proj)
+    print(list(zip(range(150,170),proj[150:170])))
     # we always assert the margin is white, i.e proj[0]==0, proj[-1]==0 to simplify the case
     proj[0], proj[-1] = 0,0
-    valley = np.where(proj < ignore)[0]
-    left_break_idx = np.where(np.diff(valley) != 1)[0]
-    left_breaks = valley[left_break_idx]
-    if left_breaks.size == 0: # if line is totally empty, return empty array
-        return left_breaks
+    precut = find_local_minima(proj, ignore)
+    # valley = np.where(proj < ignore)[0]
+    # left_break_idx = np.where(np.diff(valley) != 1)[0]
+    # left_breaks = valley[left_break_idx]
+    plt.vlines(precut, 0, 10, colors='r')
+    # plt.figure()
+    # plt.plot(proj)
+    if precut.size == 0: # if line is totally empty, return empty array
+        return precut
     # when cutting char we only use left breaks to cut evenly (otherwise the punctuation will be in a tiny slice, which will be misrecognized as a oversplit)
 
+    resegment_limit = 3
+    segment_times = 0
+    inc = height + 1 # initialize inc as line height, as height is close to the char width
+    while True:
+        print(segment_times)
+        # scan the break from left to right
+        cut = 0
+        # print(inc)
+        comb = []
+        # print(length)
+        # print(left_breaks[-5:])
+        while cut < precut[-1]:
+            idx = np.argmin(np.abs(precut - cut))
+            # idx = np.searchsorted(left_breaks, cut)
+            # try:
+            #     dist_to_left_candidate, dist_to_right_candidate = np.abs(left_breaks[idx-1:idx+1] - cut)
+            # except:
+            #     print(left_breaks)
+            #     print(left_)
+            # if dist_to_left_candidate < dist_to_right_candidate:
+            #     closest_break = left_breaks[idx-1]
+            # else:
+            #     closest_break = left_breaks[idx]
+            # print(left_breaks[idx-1:idx+1])
+            # print(cut)
+            closest_break = precut[idx]
+            comb.append(closest_break)
+            cut = closest_break + inc
+            
+            # print(cut,closest_break)
+        comb.append(length-1)
+        char_size = np.mean(np.diff(comb)).round()
+        segment_times += 1
+        if segment_times > resegment_limit or inc == char_size:
+            break
+        inc = char_size
+    
+    comb = np.asarray(comb)
+
     # merge oversplit pieces (left-right structure is less connected horizontally may be overcut)
-    delta = np.diff(left_breaks)
-    temp = []
-    span = 0
-    for d in delta:
-        span += d
-        if span > 0*height: # char is square, so height should be the width of a char
-            temp.append(span)
-            span = 0
-    temp = np.cumsum(temp) + left_breaks[0]
-    comb = np.zeros(len(temp)+2, dtype=int)
-    comb[0], comb[1:-1], comb[-1] = 0, temp, len(proj)-1
+    # delta = np.diff(left_breaks)
+    # comb = np.zeros(len(left_breaks)+2, dtype=int)
+    # temp = []
+    # span = 0
+    # for d in delta:
+    #     span += d
+    #     if span > 0*char_size: 
+    #         temp.append(span)
+    #         span = 0
+    # temp = np.cumsum(temp) + left_breaks[0]
+    # comb = np.zeros(len(temp)+2, dtype=int)
+    # comb[0], comb[1:-1], comb[-1] = 0, temp, len(proj)-1
+
     # print(comb)
     # debug
-    # image_sep = image
-    # image_sep[:, comb] = 255
-    # plt.figure(figsize=(20,10))
-    # plt.imshow(image_sep, cmap='gray')
+    image_sep = image.copy()
+    # image_sep[:, left_breaks] = 255
+    image_sep[:, comb] = 255
+    plt.figure(figsize=(20,10))
+    plt.imshow(image_sep, cmap='gray')
     return comb
 
 
 def line_type(right_line, left_line=None):
     # 由于文言文总是比白话文短，故左半行其实是多余的
     # 左有右无，小节标题
-    comb = cut_char(right_line)
-    if comb.size == 0:
+    # comb = cut_char(right_line)
+    proj = np.sum(right_line, axis=0) // 255
+    # plt.figure()
+    # plt.plot(proj)
+    if np.sum(proj) == 0:
         return 'title'
     # comb = cut_char(left_line)
-    char_size = np.diff(comb).mean()
-    indent = comb[1] # comb[0]=0, comb[1] is the first indent cut
+    char_size = right_line.shape[0]
+    print(char_size)
+    indent = np.argmax(proj > 5)
+    # print(indent)
     # 左右皆缩进两空格，段首
-    if indent >= 1.8 * char_size:
+    if indent >= 1 * char_size:
         return 'head' # 缩进两字符为段首
     # 否则为一般行
     else:
@@ -177,10 +234,10 @@ class Page:
         self.line_type = []
         para_num = 0
         for yl, yr in zip(self.comb_line, self.comb_line[1:]):
-            left_line = self.text[yl:yr+1, 0:self.l]
+            # left_line = self.text[yl:yr+1, 0:self.l]
             right_line = self.text[yl:yr+1, self.r+1:]
             match line_type(right_line):
-                case 'title': self.line_type.append(0)
+                case 'title': self.line_type.append(-1) # -1 represents title
                 case 'head':
                     para_num += 1
                     self.line_type.append(para_num)
