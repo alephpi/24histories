@@ -2,9 +2,10 @@ import cv2
 import numpy as np
 from typing import List, Literal
 
-from lib.utils import bound_box
+from lib.utils import bound_box, view
+import matplotlib.pyplot as plt
 
-def divide_two_cols(image: np.ndarray, ignore=10):
+def divide_two_cols(image: np.ndarray, ignore=50):
     """divide two cols layout to left and right
 
     Args:
@@ -17,23 +18,35 @@ def divide_two_cols(image: np.ndarray, ignore=10):
     proj = np.sum(image, axis=0) // 255
     # plt.plot(proj)
     valley = np.where(proj < ignore)[0]
-    
     # find the longest gap
-    pointer = 0
-    old_length = 0
-    new_length = 0
-    for (idx, value) in enumerate(np.diff(valley)):
-        if value == 1:
-            new_length += 1
+    arr = np.diff(valley)
+    value = 1
+    n = len(arr)
+    max_len = 0
+    start = 0
+    end = 0
+    curr_start = 0
+    prev_value = None
+    
+    for i in range(n):
+        # If the current element matches the target value
+        if arr[i] == value:
+            # If this is the first occurrence or the previous element is different
+            if prev_value is None or arr[i-1] != value:
+                curr_start = i
+            
+            # Update the maximum length and indices
+            curr_len = i - curr_start + 1
+            if curr_len > max_len:
+                max_len = curr_len
+                start = curr_start
+                end = i
+            
+            prev_value = value
         else:
-            if new_length > old_length:
-                pointer = idx
-                old_length = new_length
-                new_length = 0
-    begin = pointer - old_length
-    end = pointer
+            prev_value = arr[i]
 
-    l = valley[begin]
+    l = valley[start]
     r = valley[end]
 
     return l, r
@@ -88,6 +101,7 @@ def cut_char(image: np.ndarray, ignore=5) -> np.ndarray:
           np.ndarray: the cutting indices
     """
 
+    height = image.shape[0]
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 5)) 
     bold = cv2.dilate(image, kernel, iterations = 1) # 加粗使其更显著
     # plt.imshow(bold, cmap='gray')
@@ -104,15 +118,17 @@ def cut_char(image: np.ndarray, ignore=5) -> np.ndarray:
 
     # merge oversplit pieces (left-right structure is less connected horizontally may be overcut)
     delta = np.diff(left_breaks)
-    comb = []
+    temp = []
     span = 0
     for d in delta:
         span += d
-        if span > 20: # 20 is the empirical width threshold for a character 
-            comb.append(span)
+        if span > 0*height: # char is square, so height should be the width of a char
+            temp.append(span)
             span = 0
-    comb = np.cumsum(comb) + left_breaks[0]
-
+    temp = np.cumsum(temp) + left_breaks[0]
+    comb = np.zeros(len(temp)+2, dtype=int)
+    comb[0], comb[1:-1], comb[-1] = 0, temp, len(proj)-1
+    # print(comb)
     # debug
     # image_sep = image
     # image_sep[:, comb] = 255
@@ -129,7 +145,7 @@ def line_type(right_line, left_line=None):
         return 'title'
     # comb = cut_char(left_line)
     char_size = np.diff(comb).mean()
-    indent = comb[0]
+    indent = comb[1] # comb[0]=0, comb[1] is the first indent cut
     # 左右皆缩进两空格，段首
     if indent >= 1.8 * char_size:
         return 'head' # 缩进两字符为段首
@@ -161,7 +177,7 @@ class Page:
         self.line_type = []
         para_num = 0
         for yl, yr in zip(self.comb_line, self.comb_line[1:]):
-            # left_line = self.text[yl:yr+1, 0:self.l]
+            left_line = self.text[yl:yr+1, 0:self.l]
             right_line = self.text[yl:yr+1, self.r+1:]
             match line_type(right_line):
                 case 'title': self.line_type.append(0)
@@ -176,11 +192,18 @@ class Page:
         for yl, yr in zip(self.comb_line, self.comb_line[1:]):
             left_line = self.text[yl:yr+1, 0:self.l]
             right_line = self.text[yl:yr+1, self.r+1:]
-            left_comb = cut_char(left_line)
+            # view(left_line)
+            view(right_line)
+            # left_line is always shorter since it's in Fangsong
+            left_line = bound_box(left_line)
+            right_line = bound_box(right_line)
+            left_comb = cut_char(left_line, 10)
             left_chars = combing(left_line, left_comb, 'v')
-            right_comb = cut_char(right_line)
+            right_comb = cut_char(right_line, 10)
             right_chars = combing(right_line, right_comb, 'v')
             left_chars = [bound_box(char) for char in left_chars]
             right_chars = [bound_box(char) for char in right_chars]
-            left_chars = np.asarray(left_chars)
-            right_chars = np.asarray(right_chars)
+            # left_chars = np.asarray(left_chars)
+            # right_chars = np.asarray(right_chars)
+            break
+        return left_chars, right_chars, left_line, right_line

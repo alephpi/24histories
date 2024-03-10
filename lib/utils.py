@@ -16,6 +16,12 @@ def preprocessing(image: np.ndarray) -> np.ndarray:
     processed = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     processed = cv2.bitwise_not(processed)
     processed = adjust_skew(processed, False)
+    # rethreshold since adjust_skew just introduce gray pixels
+    # processed = cv2.bitwise_not(processed)
+    # _, processed = cv2.threshold(processed, 100, 255, cv2.THRESH_BINARY)
+    # processed = cv2.bitwise_not(processed)
+    processed[processed < 100] = 0
+    # print(np.unique(processed))
     # processed = remove_underscore(processed, False)
     # processed = cv2.bitwise_not(processed)
     # processed = cv2.cvtColor(processed, cv2.COLOR_GRAY2RGB)
@@ -193,15 +199,20 @@ def bound_box(image: np.ndarray) -> np.ndarray:
         np.ndarray: the bounded image
     """
     nonzero_indices = np.nonzero(image)
+    assert len(nonzero_indices) > 0, view(image)
 
     # Get bounding box coordinates
-    min_x, min_y = np.min(nonzero_indices[1]), np.min(nonzero_indices[0])
-    max_x, max_y = np.max(nonzero_indices[1]), np.max(nonzero_indices[0])
-    return image[min_y:max_y+1, min_x:max_x+1]
+    try:
+        min_x, min_y = np.min(nonzero_indices[1]), np.min(nonzero_indices[0])
+        max_x, max_y = np.max(nonzero_indices[1]), np.max(nonzero_indices[0])
+    except:
+        print(image)
+    # print(min_x,max_x,min_y,max_y)
+    return image[min_y:max_y, min_x:max_x]
 
 def resize(image: np.ndarray):
     return cv2.resize(image, (64,64))
 
-def view(image: np.ndarray):
-    plt.figure(figsize=(20,15))
+def view(image: np.ndarray, size=(20,15)):
+    plt.figure(figsize=size)
     plt.imshow(image, cmap='gray')
