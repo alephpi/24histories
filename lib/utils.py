@@ -210,9 +210,32 @@ def bound_box(image: np.ndarray) -> np.ndarray:
     # print(min_x,max_x,min_y,max_y)
     return image[min_y:max_y, min_x:max_x]
 
-def resize(image: np.ndarray):
-    return cv2.resize(image, (64,64))
+def resize_char(image: np.ndarray):
+    height, width = image.shape
+    pad_size = 3
+    pre_pad_size = 64 - 2 * pad_size
+
+    scale = min(pre_pad_size / width, pre_pad_size / height)
+
+    new_width = int(width * scale)
+    new_height = int(height * scale)
+
+    resized_image = cv2.resize(image, (new_width, new_height))
+
+    width_padding = (64 - new_width)
+    width_padding_l = width_padding // 2
+    width_padding_r = width_padding // 2 + (width_padding % 2 == 1)
+
+    height_padding = (64 - new_height)
+    height_padding_l = height_padding // 2
+    height_padding_r = height_padding // 2 + (height_padding % 2 == 1)
+    
+    padded_image = np.pad(resized_image, ((height_padding_l, height_padding_r),(width_padding_l, width_padding_r)))
+
+    return padded_image
 
 def view(image: np.ndarray, size=(20,15)):
     plt.figure(figsize=size)
     plt.imshow(image, cmap='gray')
+
+# def view(images, siz)

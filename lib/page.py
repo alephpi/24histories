@@ -112,7 +112,7 @@ def cut_char(image: np.ndarray, ignore=5) -> np.ndarray:
     plt.xlim(150,200)
     plt.ylim(0,10)
     plt.plot(proj)
-    print(list(zip(range(150,170),proj[150:170])))
+    # print(list(zip(range(150,170),proj[150:170])))
     # we always assert the margin is white, i.e proj[0]==0, proj[-1]==0 to simplify the case
     proj[0], proj[-1] = 0,0
     precut = find_local_minima(proj, ignore)
@@ -130,7 +130,7 @@ def cut_char(image: np.ndarray, ignore=5) -> np.ndarray:
     segment_times = 0
     inc = height + 1 # initialize inc as line height, as height is close to the char width
     while True:
-        print(segment_times)
+        # print(segment_times)
         # scan the break from left to right
         cut = 0
         # print(inc)
@@ -200,7 +200,7 @@ def line_type(right_line, left_line=None):
         return 'title'
     # comb = cut_char(left_line)
     char_size = right_line.shape[0]
-    print(char_size)
+    # print(char_size)
     indent = np.argmax(proj > 5)
     # print(indent)
     # 左右皆缩进两空格，段首

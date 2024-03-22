@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import cv2
+import pickle
 import torch
 from ultralytics import YOLO
 from lib.resnet import ResNet
@@ -8,6 +9,9 @@ from lib.utils import *
 from lib.page import Page
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+with open('./data/dicts/labels.pkl', 'rb') as f:
+    label2char = pickle.load(f)
 
 def load_model(detect_model_path='./ckpt/layout-analysis/yolov8n_best.pt', recog_model_path='./ckpt/recognition/best.pt'):
     detect_model = YOLO('./ckpt/layout-analysis/yolov8n_best.pt')
@@ -68,6 +72,15 @@ def layout_analysis(model:YOLO, images: list[np.ndarray]):
         # view(text_only)
         pages.append(Page(titles, text_only))
     return pages, la_results
+
+def ocr(model, images: list[np.ndarray]):
+    # normalize
+    input = np.array([cv2.resize(image, (64,64)) for image in images])[:,None,:,:]/255
+    input = torch.from_numpy(input).to(device)
+    with torch.no_grad():
+        logprobs = model(input.to(device))
+    labels = logprobs.argmax(axis=1).tolist()
+
 
 def proc():
     detect_model, recog_model = load_model()
