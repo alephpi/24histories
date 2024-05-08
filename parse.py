@@ -1,5 +1,10 @@
+import os
 import pprint
+import shutil
+import zipfile
 from typing import List
+
+from lxml import etree
 
 import docx
 from docx.document import Document
@@ -31,6 +36,64 @@ from docx.text.paragraph import Paragraph
 #             paragraph._element.getparent().remove(
 #                 paragraph._element
 #             )  # Remove the paragraph element
+
+def preprocessing(file_name: str):
+    # Extract the DOCX file contents
+    with zipfile.ZipFile(file_name, 'r') as zip:
+        zip.extractall('temp')
+
+    # Modify the document.xml file
+    doc_xml = os.path.join('temp', 'word', 'document.xml')
+    with open(doc_xml, 'r', encoding='utf-8') as f:
+        doc = f.read()
+    # return doc
+    doc_cleaned = clean_doc(doc)
+    with open(doc_xml, 'w', encoding='utf-8') as f:
+        f.write(doc_cleaned)
+    # Recompress the DOCX file
+    with zipfile.ZipFile(file_name, 'w') as new_zip:
+        for root, dirs, files in os.walk('temp'):
+            for file in files:
+                path = os.path.join(root, file)
+                new_zip.write(path, os.path.relpath(path, 'temp'))
+
+    # remove temp folder
+    shutil.rmtree('temp')
+
+
+def clean_doc(doc: str):
+    # Register namespaces
+    ns = {
+        "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+        "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+        # Add other namespaces as needed
+    }
+
+    # Parse the XML data
+    root = etree.fromstring(doc.encode('utf-8'))
+
+    # Find all paragraphs that contain mc:AlternateContent elements
+    false_paragraphs = root.xpath(
+        ".//w:p[.//mc:AlternateContent]",
+        namespaces=ns,
+    )
+
+    for false_paragraph in false_paragraphs:
+        true_paragraphs = false_paragraph.xpath(
+            ".//mc:Fallback//w:p",
+            namespaces=ns,
+        )
+        # get the parent of false_paragraph, remove the false_paragraph and insert all the true_paragraphs
+        parent = false_paragraph.getparent()
+        index = parent.index(false_paragraph)
+        parent.remove(false_paragraph)
+        for true_paragraph in true_paragraphs:
+            parent.insert(index, true_paragraph)
+            index += 1
+
+    # Output the modified XML with original namespace prefixes
+    doc_cleaned = etree.tostring(root, xml_declaration=True, encoding="utf-8").decode("utf-8")
+    return doc_cleaned
 
 def show_doc(doc: Document, sec_range=(None, None), show_empty=False):
     for i, sec in enumerate(doc.sections[sec_range[0]:sec_range[1]]):
