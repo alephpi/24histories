@@ -10,8 +10,74 @@
 
 [古籍印刷通用字規範字形表](http://www.homeinmists.com/Standard_glyph_list.htm)
 
-## 工作流
-1. ~~使用夸克全能王（🤯） OCR 得到 docx~~对于已经扫描好的影印 pdf 文件，使用夸克全能王会经过一个相当冗长的再扫描过程，不仅原 pdf 体积暴增，而且识别速度极慢且单次只能上传 500 页。而使用夸克网盘可以批量上传 pdf，然后运用网盘自带的转 docx 工具即可（二个工具调用的接口应该是相同的），这样速度更快。（夸克扫描王退钱！）
+## 工作流（5 月 5 日）
+1. 对于已经扫描好的影印 pdf 文件，使用夸克全能王会经过一个相当冗长的再扫描过程，不仅原 pdf 体积暴增，而且识别速度极慢且单次只能上传 500 页。而使用夸克网盘可以批量上传 pdf，然后运用网盘自带的转 docx 工具即可（二者调用的接口应该是相同的），这样速度更快。（夸克扫描王退钱！）
+2. 解析 docx：用夸克网盘自带的 pdf 转 word 功能得到的 docx 文件与夸克全能王得到的 docx 文件格式有较大差异，其版面恢复也较完善。我猜测是夸克扫描王其实把 pdf 中的每页都先再扫描成一张图片，然后其实使用的是 png 转 word 功能，因此其效果更差。总之对新得到的 docx 文件，其格式有如下特点：
+   1. 分栏段落基本由文本框包裹，这样即便用 word 打开在页面上也保持版面结构，不像之前得到的 docx 文件只依靠段落边距，破坏版面结构。
+   2. 这样做的坏处是，文本并非都是 paragraph 格式，而是存在冗余结构。
+      <details>
+        <summary>
+        例如：
+        </summary>
+        <p>
+        
+        ```xml
+        <w:r>
+            <mc:AlternateContent>
+                <mc:Choice Requires="wps">
+                    <w:drawing>
+                        <!-- ... -->
+                    </w:drawing>
+                </mc:Choice>
+                <mc:Fallback>
+                    <w:pict>
+                        <v:shape type="#_x0000_t202" filled="f" stroked="f"
+                            style="margin-left:749pt;margin-top:0pt;width:205pt;height:112pt;mso-position-vertical:absolute;mso-position-vertical-relative:text;mso-position-horizontal:absolute;mso-position-horizontal-relative:text;mso-wrap-style:square;position:absolute;v-text-anchor:top;">
+                            <w10:wrap type="topAndBottom" />
+                            <v:textbox inset="0pt,0pt,0pt,0pt" style="mso-fit-shape-to-text:t">
+                                <w:txbxContent>
+                                    <w:p>
+                                        <w:pPr>
+                                            <w:wordWrap w:val="on" />
+                                            <w:autoSpaceDE w:val="off" />
+                                            <w:autoSpaceDN w:val="off" />
+                                            <w:spacing w:before="0" w:after="0" w:line="2240"
+                                                w:lineRule="atLeast" />
+                                            <w:ind w:left="0" w:right="0" />
+                                            <w:jc w:val="both" />
+                                            <w:textAlignment w:val="auto" />
+                                            <w:rPr>
+                                                <w:sz w:val="136" />
+                                            </w:rPr>
+                                        </w:pPr>
+                                        <w:r>
+                                            <w:rPr>
+                                                <w:rFonts w:ascii="宋体" w:hAnsi="宋体" w:cs="宋体"
+                                                    w:eastAsia="宋体" />
+                                                <w:sz w:val="136" />
+                                                <w:color w:val="000000" />
+                                                <w:b w:val="off" />
+                                                <w:i w:val="off" />
+                                                <w:strike w:val="off" />
+                                            </w:rPr>
+                                            <w:t>许嘉璐</w:t>
+                                        </w:r>
+                                    </w:p>
+                                </w:txbxContent>
+                            </v:textbox>
+                        </v:shape>
+                    </w:pict>
+                </mc:Fallback>
+            </mc:AlternateContent>
+        </w:r>
+        ```
+        </p>
+        </details>
+        
+        注意到其中`<w:r>`内部嵌套了`<w:p>`，这种倒置的层级是借助`<w:pict>`实现的，因此语法上仍合规。更麻烦的是，`<mc>`系的标签在`python-docx`中不对应伪类，因而这里面的`<w:p>`无法被其`doc.paragraph`属性识别。详见 [issue](https://github.com/python-openxml/python-docx/issues/1389)。为此只得考虑先将这种冗余结构剔除，然后再导入。
+        
+## 工作流（弃用）
+1. 使用夸克全能王（🤯） OCR 得到 docx
 2. 解析 docx：
    OCR 得到的 docx 并不能完成全部版面恢复，比如居中格式实际上由缩进代替。通过分析我们有如下观察：
    1. 所有文本都是 paragraph 格式，没有其他特殊格式如 header 等。
