@@ -104,27 +104,56 @@ def show_sec(sec: Section, show_empty=False):
     for i, para in enumerate(sec.iter_inner_content()):
         show_para(para, show_empty)
 
-def show_para(para: Paragraph|Table, show_empty=False):
+def show_para(para: Paragraph|Table|List[Paragraph|Table], show_empty=False):
     if isinstance(para, Table):
         print(para.table)
-    else:
-        left_indent = para.paragraph_format.left_indent
-        first_line_indent = para.paragraph_format.first_line_indent
-        left_indent = left_indent.pt if left_indent else 0
-        first_line_indent = first_line_indent.pt if first_line_indent else 0
+    elif isinstance(para, Paragraph):
+        left_indent, first_line_indent, font_size = para_property(para)
         if not show_empty:
             if para.text.strip():
-                print(left_indent, first_line_indent, para.text)
+                print(left_indent, first_line_indent, font_size, para.text)
         else:
-            print(left_indent, first_line_indent, para.text)
+            print(left_indent, first_line_indent, font_size, para.text)
+    else:
+        for p in para:
+            show_para(p, show_empty)
 
-def para_type(para: Paragraph):
+
+def pagination(doc: Document):
+    pages: List[List[Paragraph]] = []
+    page: List[Paragraph] = []
+    for i, para in enumerate(doc.paragraphs):
+        # if para.text contains numbers, it's a section title
+        if any(char.isdigit() for char in para.text):
+            pages.append(page)
+            page = []
+        page.append(para)
+    return pages
+
+def segmentation(pages: List[List[Paragraph]]):
+    new_pages: List[List[List[Paragraph]]] = []
+    new_page: List[List[Paragraph]] = []
+    section: List[Paragraph] = []
+    for page in pages:
+        new_page = []
+        section = []
+        for para in page:
+            if para.text.strip():
+                section.append(para)
+            elif section:
+                    new_page.append(section)
+                    section = []
+        if section:
+            new_page.append(section)
+        new_pages.append(new_page)
+    return new_pages
+
+
+
+def para_property(para: Paragraph|Table):
     left_indent = para.paragraph_format.left_indent
     first_line_indent = para.paragraph_format.first_line_indent
     left_indent = left_indent.pt if left_indent else 0
     first_line_indent = first_line_indent.pt if first_line_indent else 0
-    if left_indent:
-        return "小节标题"
-    if first_line_indent:
-        return "正文开篇"
-    return "正文续篇"
+    font_size = para.runs[0].font.size.pt if para.runs and para.runs[0].font.size else 0
+    return left_indent, first_line_indent, font_size
